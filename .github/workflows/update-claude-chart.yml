@@ -1,0 +1,47 @@
+name: Update Claude Usage Chart
+
+on:
+    schedule:
+        # 每天国际标准时间 02:00 (北京时间 10:00, 东京时间 11:00) 运行
+        # 确保这个时间晚于你本地 crontab 上报的时间
+        - cron: "0 2 * * *"
+    workflow_dispatch: # 允许手动触发按钮
+
+jobs:
+    build-and-update:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write # 需要写权限来提交 SVG 文件
+
+        steps:
+            - name: Checkout repo
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.x"
+                  cache: "pip" # 缓存 pip 依赖加快运行速度
+
+            - name: Install dependencies
+              run: pip install -r requirements.txt
+
+            - name: Generate SVG Chart
+              env:
+                  # 使用 GitHub 自动提供的 Token
+                  GH_TOKEN: ${{ secrets.G_TOKEN }}
+                  # 自动获取当前仓库名 "owner/repo"
+                  REPO_NAME: ${{ secrets.REPO_NAME }}
+                  # 【重要】请替换为你实际记录日志的 Issue ID
+                  ISSUE_NUMBER: ${{ secrets.ISSUE_NUMBER || '3' }}
+              run: python scripts/generate_svg.py
+
+            - name: Commit and push if changed
+              run: |
+                  git config user.name "Claude Stats Bot"
+                  git config user.email "actions@github.com"
+                  git add assets/claude_usage.svg
+                  # 如果文件没有变化，git commit 会失败，导致流程退出。
+                  # 使用 || exit 0 让它在没有变化时正常结束，不报错。
+                  git commit -m "Update Claude usage chart [skip ci]" || exit 0
+                  git push
